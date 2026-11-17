@@ -1,0 +1,7 @@
+[theme]
+base = "light"
+primaryColor = "#2E7D32"            # verde-floresta (sliders, botões, foco)
+backgroundColor = "#F3F7EC"         # fundo claro esverdeado
+secondaryBackgroundColor = "#DDEBD0" # verde-musgo claro
+textColor = "#1B3A1F"               # verde bem escuro
+font = "sans serif"
