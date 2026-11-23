@@ -37,6 +37,5 @@ python -m streamlit run simulacao_nivel_rio.py
 | `imagens/` | Logo e foto de fundo |
 | `.streamlit/config.toml` | Cores do tema |
 | `abrir_painel.bat` | Abre o painel com dois cliques no Windows |
-| `simulacao_nivel_rio_v1.py`, `_v2.py` | Versões antigas, com dados fictícios |
 
 Os dados são históricos, não medições em tempo real.
