@@ -1,17 +1,4 @@
-"""
-PREVISÃO DO NÍVEL DO RIO NEGRO EM MANAUS ATÉ O FIM DE 2026
-==========================================================
-TCC: IoT na medição e monitoramento do nível de água em rios da Amazônia.
-
-Seção "Previsão" do painel (streamlit run simulacao_nivel_rio.py).
-
-Usa só os dados reais de 2026 (telemetria da ANA, estação 14990000), que
-vão até 17/11/2026, e projeta dia a dia até 31/12/2026 com o mesmo modelo
-do painel: regressão linear sobre as médias dos últimos 7 dias, aplicada
-de forma recursiva.
-
-É uma PROJEÇÃO, não uma medição.
-"""
+# Seção de previsão até 31/12 (dados de 2026)
 
 import pandas as pd
 
@@ -23,14 +10,15 @@ from simulacao_nivel_rio import (
 FIM_PROJECAO = pd.Timestamp("2026-12-31")
 
 
+# Série real e previsão até 31/12
 def calcular_previsao() -> tuple[pd.Series, pd.Series]:
-    """Devolve a série diária real de 2026 e a projeção até 31/12."""
     serie = niveis_diarios(detectar_suspeitas(carregar_leituras()))
     passos = (FIM_PROJECAO - serie.index[-1]).days
     datas = pd.date_range(serie.index[-1] + pd.Timedelta(days=1), FIM_PROJECAO, freq="D")
     return serie, pd.Series(prever_nivel(serie, passos), index=datas)
 
 
+# Mostra a seção de previsão
 def mostrar_previsao() -> None:
     import plotly.graph_objects as go
     import streamlit as st

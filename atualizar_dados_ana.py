@@ -1,14 +1,5 @@
-"""
-Baixa da ANA (Agência Nacional de Águas) as leituras de telemetria do nível
-do Rio Negro na estação de Manaus (código 14990000) e salva em
-dados/rio_negro_manaus_<ano>.csv, usado pelo painel.
-
-Os dados de telemetria são brutos (não consistidos pela ANA): podem ter
-leituras erradas, que o painel marca como suspeitas.
-
-Executar:  python atualizar_dados_ana.py            (ano atual até hoje)
-           python atualizar_dados_ana.py 2026
-"""
+# Baixa as leituras da ANA e salva em dados/rio_negro_manaus_<ano>.csv
+# Uso: python atualizar_dados_ana.py 2026
 
 import calendar
 import sys
@@ -25,6 +16,7 @@ URL = ("https://telemetriaws1.ana.gov.br/ServiceANA.asmx/DadosHidrometeorologico
 PASTA_DADOS = Path(__file__).parent / "dados"
 
 
+# Baixa um mês
 def baixar_mes(ano: int, mes: int, ate: date) -> list[tuple[str, str]]:
     ultimo = min(date(ano, mes, calendar.monthrange(ano, mes)[1]), ate)
     url = URL.format(est=ESTACAO, ini=f"01/{mes:02d}/{ano}", fim=ultimo.strftime("%d/%m/%Y"))
@@ -35,6 +27,7 @@ def baixar_mes(ano: int, mes: int, ate: date) -> list[tuple[str, str]]:
             for r in raiz.iter("DadosHidrometereologicos")]
 
 
+# Baixa o ano até a data dada
 def baixar_ano(ano: int, ate: date) -> pd.DataFrame:
     linhas = []
     for mes in range(1, ate.month + 1 if ate.year == ano else 13):
@@ -47,6 +40,7 @@ def baixar_ano(ano: int, ate: date) -> pd.DataFrame:
     return df.dropna().drop_duplicates("data_hora").sort_values("data_hora")
 
 
+# Salva o CSV
 def main() -> None:
     hoje = date.today()
     ano = int(sys.argv[1]) if len(sys.argv) > 1 else hoje.year

@@ -1,19 +1,4 @@
-"""
-DADOS HISTÓRICOS - RIO NEGRO EM MANAUS (2026)
-=============================================
-TCC: IoT na medição e monitoramento do nível de água em rios da Amazônia.
-
-Usa as leituras reais de telemetria da ANA (estação 14990000, Rio Negro em
-Manaus, uma leitura a cada 15 minutos) para demonstrar a etapa de
-PROCESSAMENTO NO SERVIDOR da arquitetura proposta (sensor -> LoRaWAN ->
-servidor -> painel): filtro de leituras suspeitas, resumo por trimestre e
-previsão de curto prazo com aprendizado de máquina.
-
-São dados históricos, não medições em tempo real. Para atualizar o arquivo
-de dados:  python atualizar_dados_ana.py
-
-Executar:  streamlit run simulacao_nivel_rio.py
-"""
+# Painel do nível do Rio Negro em Manaus (dados da ANA, 2026)
 
 import base64
 from pathlib import Path
@@ -23,7 +8,7 @@ import pandas as pd
 
 PASTA_IMAGENS = Path(__file__).parent / "imagens"
 ARQUIVO_DADOS = Path(__file__).parent / "dados" / "rio_negro_manaus_2026.csv"
-# Os dados reais param aqui: leituras posteriores no arquivo são ignoradas.
+# Último dia de dados usados
 DATA_FINAL = pd.Timestamp("2026-11-17 23:59:59")
 ESTACAO = "ANA 14990000 - Rio Negro em Manaus"
 
@@ -31,8 +16,7 @@ TRIMESTRES = {1: "1º trimestre (jan–mar)", 2: "2º trimestre (abr–jun)",
               3: "3º trimestre (jul–set)", 4: "4º trimestre (out–dez)"}
 PREVISAO = "Previsão (até 31/12)"
 
-# Registros do Porto de Manaus informados para o projeto (régua diferente da
-# estação da ANA; mostrados só para comparação).
+# Registros do Porto de Manaus (só para comparação)
 REGISTROS_PORTO = [
     ("2026-01-01", 22.03), ("2026-01-31", 22.77),
     ("2026-06-01", 27.95), ("2026-06-21", 28.51), ("2026-06-28", 28.51),
@@ -40,15 +24,13 @@ REGISTROS_PORTO = [
 ]
 
 
+# Converte cm em texto em metros
 def metros(cm: float, sinal: bool = False) -> str:
-    """Converte cm para texto em metros com vírgula: 2203 -> '22,03 m'."""
     texto = f"{cm / 100:+.2f}" if sinal else f"{cm / 100:.2f}"
     return texto.replace(".", ",") + " m"
 
 
-# ---------------------------------------------------------------------------
-# 1. Leituras reais (telemetria da ANA, a cada 15 minutos)
-# ---------------------------------------------------------------------------
+# Lê o CSV da ANA até a DATA_FINAL
 def carregar_leituras() -> pd.DataFrame:
     df = pd.read_csv(ARQUIVO_DADOS, parse_dates=["data_hora"])
     df = df[df["data_hora"] <= DATA_FINAL].reset_index(drop=True)
@@ -56,16 +38,8 @@ def carregar_leituras() -> pd.DataFrame:
     return df
 
 
-# ---------------------------------------------------------------------------
-# 2. Processamento no servidor: mediana móvel + MAD
-# ---------------------------------------------------------------------------
+# Marca leituras suspeitas (mediana móvel + MAD)
 def detectar_suspeitas(df: pd.DataFrame, w: int = 13, k: float = 5.0) -> pd.DataFrame:
-    """Marca como suspeita a leitura em que |x_t - m_t| > k * MAD_t.
-
-    m_t   = mediana das w leituras em torno de t
-    MAD_t = mediana de |x_i - m_t| nessa mesma janela
-    Um piso de 0,5 cm no MAD evita marcar ruído em trechos muito estáveis.
-    """
     df = df.copy()
     janela = df["nivel_cm"].rolling(w, center=True, min_periods=3)
     df["mediana_movel"] = janela.median()
@@ -76,15 +50,15 @@ def detectar_suspeitas(df: pd.DataFrame, w: int = 13, k: float = 5.0) -> pd.Data
     return df
 
 
+# Média de cada dia sem as leituras suspeitas
 def niveis_diarios(df: pd.DataFrame) -> pd.Series:
-    """Média de cada dia (cm) usando só as leituras válidas."""
     validas = df[~df["suspeita"]]
     diario = validas.groupby(validas["data_hora"].dt.normalize())["nivel_cm"].mean()
-    return diario.asfreq("D").interpolate()   # cobre um dia sem leitura válida, se houver
+    return diario.asfreq("D").interpolate()
 
 
+# Resumo de cada trimestre
 def resumo_trimestres(diario: pd.Series, df: pd.DataFrame) -> pd.DataFrame:
-    """Início, fim, máximo, mínimo e variação de cada trimestre (médias diárias)."""
     linhas = []
     for t, s in diario.groupby(diario.index.quarter):
         fim_trimestre = pd.Timestamp(year=s.index[0].year, month=3 * t, day=1) + pd.offsets.MonthEnd()
@@ -102,17 +76,8 @@ def resumo_trimestres(diario: pd.Series, df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(linhas).set_index("trimestre")
 
 
-# ---------------------------------------------------------------------------
-# 3. Previsão de curto prazo (aprendizado de máquina)
-# ---------------------------------------------------------------------------
+# Previsão com regressão linear sobre os últimos 7 dias
 def prever_nivel(serie: pd.Series, passos: int, lags: int = 7) -> np.ndarray:
-    """Modelo autorregressivo com regressão linear (scikit-learn).
-
-    Treino: cada exemplo usa as médias dos `lags` dias anteriores (7 = uma
-    semana) como entrada e a média do dia seguinte como saída.
-    Previsão recursiva: prevê o próximo dia, acrescenta essa previsão ao
-    histórico e repete até completar o horizonte.
-    """
     from sklearn.linear_model import LinearRegression
 
     x = serie.to_numpy()
@@ -129,53 +94,43 @@ def prever_nivel(serie: pd.Series, passos: int, lags: int = 7) -> np.ndarray:
     return np.array(previsoes)
 
 
+# Erro médio da previsão escondendo os últimos dias
 def erro_da_previsao(serie: pd.Series, passos: int) -> float:
-    """Teste simples: esconde os últimos `passos` dias, prevê esse trecho
-    com o restante e mede o erro médio absoluto (cm)."""
     previsto = prever_nivel(serie.iloc[:-passos], passos)
     real = serie.iloc[-passos:].to_numpy()
     return float(np.mean(np.abs(previsto - real)))
 
 
-# ---------------------------------------------------------------------------
-# 4. Painel
-# ---------------------------------------------------------------------------
-# Paleta amazônica
+# Cores do tema
 VERDE_FLORESTA = "#1B5E20"
 VERDE_FOLHA = "#2E7D32"
 VERDE_CLARO = "#81C784"
-AGUA_RIO = "#00796B"      # verde-água do rio
-TERRA = "#8D6E63"         # marrom de águas barrentas
-URUCUM = "#D84315"        # laranja-avermelhado (alerta)
+AGUA_RIO = "#00796B"
+TERRA = "#8D6E63"
+URUCUM = "#D84315"
 
+# CSS do tema
 CSS_AMAZONICO = f"""
 <style>
-/* Barra lateral: degradê de mata */
 [data-testid="stSidebar"] {{
     background: linear-gradient(180deg, #0B2E10 0%, #12391A 60%, #1A4422 100%);
 }}
 [data-testid="stSidebar"] * {{ color: #F1F8E9 !important; }}
-/* Logo colada no topo: o cabeçalho (botão de recolher) flutua por cima, à direita */
 [data-testid="stSidebarHeader"] {{
     position: absolute; top: 0; right: 0; z-index: 10;
     height: auto; padding: .25rem;
 }}
 [data-testid="stSidebarUserContent"] {{ padding-top: .75rem; }}
-/* Logo um pouco menor e centralizada */
 [data-testid="stSidebar"] [data-testid="stImage"] {{ margin: 0 auto; }}
 [data-testid="stSidebar"] [data-testid="stImage"] img {{
     width: 90% !important; display: block; margin: 0 auto;
 }}
-
-/* Título */
 h1 {{
     color: {VERDE_FLORESTA} !important;
     border-bottom: 4px solid {VERDE_CLARO};
     padding-bottom: .3rem;
 }}
 h2, h3 {{ color: {VERDE_FOLHA} !important; }}
-
-/* Cartões dos indicadores */
 [data-testid="stMetric"] {{
     background: #FFFFFF;
     border-left: 6px solid {VERDE_FOLHA};
@@ -184,8 +139,6 @@ h2, h3 {{ color: {VERDE_FOLHA} !important; }}
     box-shadow: 0 2px 6px rgba(27, 94, 32, .15);
 }}
 [data-testid="stMetricValue"] {{ color: {VERDE_FLORESTA}; }}
-
-/* Botões */
 .stButton > button, .stDownloadButton > button {{
     background-color: {VERDE_FOLHA};
     color: #FFFFFF;
@@ -200,8 +153,8 @@ h2, h3 {{ color: {VERDE_FOLHA} !important; }}
 """
 
 
+# Procura a imagem na pasta imagens
 def encontrar_imagem(nome: str) -> Path | None:
-    """Procura imagens/<nome>.png|.jpg|.jpeg|.webp e devolve o primeiro que existir."""
     for ext in (".png", ".jpg", ".jpeg", ".webp"):
         caminho = PASTA_IMAGENS / f"{nome}{ext}"
         if caminho.exists():
@@ -209,14 +162,13 @@ def encontrar_imagem(nome: str) -> Path | None:
     return None
 
 
+# Recorta a logo e arredonda os cantos
 def recortar_logo(caminho: Path):
-    """Recorta só a parte colorida da logo (descarta fundo branco/xadrez embutido)
-    e arredonda os cantos com transparência real."""
     from PIL import Image, ImageDraw
 
     img = Image.open(caminho).convert("RGBA")
     rgb = np.asarray(img.convert("RGB")).astype(int)
-    saturacao = rgb.max(axis=2) - rgb.min(axis=2)       # cinza/branco ≈ 0
+    saturacao = rgb.max(axis=2) - rgb.min(axis=2)
     linhas, colunas = np.where(saturacao > 60)
     if linhas.size == 0:
         return img
@@ -229,8 +181,8 @@ def recortar_logo(caminho: Path):
     return img
 
 
+# CSS da foto de fundo
 def css_fundo(caminho: Path | None) -> str:
-    """Fundo com a foto da floresta/rio + véu claro para manter o texto legível."""
     if caminho is None:
         return ""
     mime = "jpeg" if caminho.suffix.lower() in (".jpg", ".jpeg") else caminho.suffix[1:].lower()
@@ -243,7 +195,6 @@ def css_fundo(caminho: Path | None) -> str:
         url("data:image/{mime};base64,{dados}") center / cover fixed no-repeat;
 }}
 [data-testid="stHeader"] {{ background: transparent; }}
-/* Conteúdo principal num painel translúcido sobre a foto */
 [data-testid="stMainBlockContainer"], .block-container {{
     background: rgba(255, 255, 255, .75);
     border-radius: 16px;
@@ -255,6 +206,7 @@ def css_fundo(caminho: Path | None) -> str:
 """
 
 
+# Monta o painel
 def main() -> None:
     import plotly.graph_objects as go
     import streamlit as st
@@ -263,7 +215,7 @@ def main() -> None:
     st.markdown(CSS_AMAZONICO, unsafe_allow_html=True)
     st.markdown(css_fundo(encontrar_imagem("fundo_amazonia")), unsafe_allow_html=True)
 
-    # Logo da FAMETRO no topo da barra lateral, ocupando toda a largura
+    # Logo
     logo = encontrar_imagem("logo_fametro")
     if logo is not None:
         st.sidebar.image(recortar_logo(logo), width="stretch")
@@ -299,7 +251,7 @@ def main() -> None:
         "suspeitas, resumo por trimestre e previsão dos próximos dias."
     )
 
-    # Recorte do período escolhido
+    # Período escolhido
     trimestre = next((t for t, nome in TRIMESTRES.items() if nome == escolha), None)
     if trimestre is not None and trimestre not in resumo.index:
         st.warning(f"Ainda não há dados do {escolha}.")
@@ -311,13 +263,13 @@ def main() -> None:
         diap = diario[diario.index.quarter == trimestre]
     suspeitas = dfp[dfp["suspeita"]]
 
-    # Previsão sempre a partir do último dia com dados
+    # Previsão curta
     previsao = prever_nivel(diario, dias_prev)
     erro = erro_da_previsao(diario, dias_prev)
     datas_prev = pd.date_range(diario.index[-1], periods=dias_prev + 1, freq="D")[1:]
     mostra_previsao = diap.index[-1] == diario.index[-1]
 
-    # Indicadores do período (médias diárias, sem as leituras suspeitas)
+    # Cartões
     st.subheader(escolha + (" — parcial" if trimestre and resumo.loc[trimestre, "parcial"] else ""))
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric(f"Início ({diap.index[0]:%d/%m})", metros(diap.iloc[0]))
@@ -334,7 +286,7 @@ def main() -> None:
         f"erro médio no teste: ±{erro:.1f} cm."
     )
 
-    # Gráfico principal (em metros)
+    # Gráfico principal
     fig = go.Figure()
     fig.add_trace(go.Scattergl(x=dfp["data_hora"], y=dfp["nivel_cm"] / 100, mode="lines",
                                name="Leituras (15 min)",
@@ -364,7 +316,7 @@ def main() -> None:
                                  line=dict(color=VERDE_FOLHA, width=2, dash="dash")))
         fig.add_vline(x=fim_dados, line=dict(color=VERDE_CLARO, dash="dot"))
     if trimestre is None:
-        # Faixas destacando cada trimestre no ano inteiro
+        # Faixas dos trimestres
         for t in resumo.index:
             ini = pd.Timestamp(year=inicio_dados.year, month=3 * t - 2, day=1)
             fim_faixa = min(ini + pd.DateOffset(months=3), datas_prev[-1] + pd.Timedelta(days=1))
@@ -437,7 +389,7 @@ def main() -> None:
     })
     st.dataframe(tabela, hide_index=True, width="stretch")
 
-    # Tabela de ocorrências do período
+    # Leituras suspeitas
     st.subheader("Ocorrências detectadas")
     if suspeitas.empty:
         st.info("Nenhuma leitura suspeita no período com os parâmetros atuais.")
