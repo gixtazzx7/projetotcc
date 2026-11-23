@@ -1,4 +1,4 @@
-# Painel do nível do Rio Negro em Manaus (dados da ANA, 2026)
+# painel do nível do rio negro em manaus (dados da ana, 2026)
 
 import base64
 from pathlib import Path
@@ -8,7 +8,7 @@ import pandas as pd
 
 PASTA_IMAGENS = Path(__file__).parent / "imagens"
 ARQUIVO_DADOS = Path(__file__).parent / "dados" / "rio_negro_manaus_2026.csv"
-# Último dia de dados usados
+# último dia de dados usados
 DATA_FINAL = pd.Timestamp("2026-11-17 23:59:59")
 ESTACAO = "ANA 14990000 - Rio Negro em Manaus"
 
@@ -16,7 +16,7 @@ TRIMESTRES = {1: "1º trimestre (jan–mar)", 2: "2º trimestre (abr–jun)",
               3: "3º trimestre (jul–set)", 4: "4º trimestre (out–dez)"}
 PREVISAO = "Previsão (até 31/12)"
 
-# Registros do Porto de Manaus (só para comparação)
+# registros do porto de manaus (só para comparação)
 REGISTROS_PORTO = [
     ("2026-01-01", 22.03), ("2026-01-31", 22.77),
     ("2026-06-01", 27.95), ("2026-06-21", 28.51), ("2026-06-28", 28.51),
@@ -24,13 +24,13 @@ REGISTROS_PORTO = [
 ]
 
 
-# Converte cm em texto em metros
+# converte cm em texto em metros
 def metros(cm: float, sinal: bool = False) -> str:
     texto = f"{cm / 100:+.2f}" if sinal else f"{cm / 100:.2f}"
     return texto.replace(".", ",") + " m"
 
 
-# Lê o CSV da ANA até a DATA_FINAL
+# lê o csv da ana até a DATA_FINAL
 def carregar_leituras() -> pd.DataFrame:
     df = pd.read_csv(ARQUIVO_DADOS, parse_dates=["data_hora"])
     df = df[df["data_hora"] <= DATA_FINAL].reset_index(drop=True)
@@ -38,7 +38,7 @@ def carregar_leituras() -> pd.DataFrame:
     return df
 
 
-# Marca leituras suspeitas (mediana móvel + MAD)
+# marca leituras suspeitas (mediana móvel + mad)
 def detectar_suspeitas(df: pd.DataFrame, w: int = 13, k: float = 5.0) -> pd.DataFrame:
     df = df.copy()
     janela = df["nivel_cm"].rolling(w, center=True, min_periods=3)
@@ -50,14 +50,14 @@ def detectar_suspeitas(df: pd.DataFrame, w: int = 13, k: float = 5.0) -> pd.Data
     return df
 
 
-# Média de cada dia sem as leituras suspeitas
+# média de cada dia sem as leituras suspeitas
 def niveis_diarios(df: pd.DataFrame) -> pd.Series:
     validas = df[~df["suspeita"]]
     diario = validas.groupby(validas["data_hora"].dt.normalize())["nivel_cm"].mean()
     return diario.asfreq("D").interpolate()
 
 
-# Resumo de cada trimestre
+# resumo de cada trimestre
 def resumo_trimestres(diario: pd.Series, df: pd.DataFrame) -> pd.DataFrame:
     linhas = []
     for t, s in diario.groupby(diario.index.quarter):
@@ -76,7 +76,7 @@ def resumo_trimestres(diario: pd.Series, df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(linhas).set_index("trimestre")
 
 
-# Previsão com regressão linear sobre os últimos 7 dias
+# previsão com regressão linear sobre os últimos 7 dias
 def prever_nivel(serie: pd.Series, passos: int, lags: int = 7) -> np.ndarray:
     from sklearn.linear_model import LinearRegression
 
@@ -94,14 +94,14 @@ def prever_nivel(serie: pd.Series, passos: int, lags: int = 7) -> np.ndarray:
     return np.array(previsoes)
 
 
-# Erro médio da previsão escondendo os últimos dias
+# erro médio da previsão escondendo os últimos dias
 def erro_da_previsao(serie: pd.Series, passos: int) -> float:
     previsto = prever_nivel(serie.iloc[:-passos], passos)
     real = serie.iloc[-passos:].to_numpy()
     return float(np.mean(np.abs(previsto - real)))
 
 
-# Cores do tema
+# cores do tema
 VERDE_FLORESTA = "#1B5E20"
 VERDE_FOLHA = "#2E7D32"
 VERDE_CLARO = "#81C784"
@@ -109,7 +109,7 @@ AGUA_RIO = "#00796B"
 TERRA = "#8D6E63"
 URUCUM = "#D84315"
 
-# CSS do tema
+# css do tema
 CSS_AMAZONICO = f"""
 <style>
 [data-testid="stSidebar"] {{
@@ -153,7 +153,7 @@ h2, h3 {{ color: {VERDE_FOLHA} !important; }}
 """
 
 
-# Procura a imagem na pasta imagens
+# procura a imagem na pasta imagens
 def encontrar_imagem(nome: str) -> Path | None:
     for ext in (".png", ".jpg", ".jpeg", ".webp"):
         caminho = PASTA_IMAGENS / f"{nome}{ext}"
@@ -162,7 +162,7 @@ def encontrar_imagem(nome: str) -> Path | None:
     return None
 
 
-# Recorta a logo e arredonda os cantos
+# recorta a logo e arredonda os cantos
 def recortar_logo(caminho: Path):
     from PIL import Image, ImageDraw
 
@@ -181,7 +181,7 @@ def recortar_logo(caminho: Path):
     return img
 
 
-# CSS da foto de fundo
+# css da foto de fundo
 def css_fundo(caminho: Path | None) -> str:
     if caminho is None:
         return ""
@@ -206,7 +206,7 @@ def css_fundo(caminho: Path | None) -> str:
 """
 
 
-# Monta o painel
+# monta o painel
 def main() -> None:
     import plotly.graph_objects as go
     import streamlit as st
@@ -215,7 +215,7 @@ def main() -> None:
     st.markdown(CSS_AMAZONICO, unsafe_allow_html=True)
     st.markdown(css_fundo(encontrar_imagem("fundo_amazonia")), unsafe_allow_html=True)
 
-    # Logo
+    # logo
     logo = encontrar_imagem("logo_fametro")
     if logo is not None:
         st.sidebar.image(recortar_logo(logo), width="stretch")
@@ -251,7 +251,7 @@ def main() -> None:
         "suspeitas, resumo por trimestre e previsão dos próximos dias."
     )
 
-    # Período escolhido
+    # período escolhido
     trimestre = next((t for t, nome in TRIMESTRES.items() if nome == escolha), None)
     if trimestre is not None and trimestre not in resumo.index:
         st.warning(f"Ainda não há dados do {escolha}.")
@@ -263,13 +263,13 @@ def main() -> None:
         diap = diario[diario.index.quarter == trimestre]
     suspeitas = dfp[dfp["suspeita"]]
 
-    # Previsão curta
+    # previsão curta
     previsao = prever_nivel(diario, dias_prev)
     erro = erro_da_previsao(diario, dias_prev)
     datas_prev = pd.date_range(diario.index[-1], periods=dias_prev + 1, freq="D")[1:]
     mostra_previsao = diap.index[-1] == diario.index[-1]
 
-    # Cartões
+    # cartões
     st.subheader(escolha + (" — parcial" if trimestre and resumo.loc[trimestre, "parcial"] else ""))
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric(f"Início ({diap.index[0]:%d/%m})", metros(diap.iloc[0]))
@@ -286,7 +286,7 @@ def main() -> None:
         f"erro médio no teste: ±{erro:.1f} cm."
     )
 
-    # Gráfico principal
+    # gráfico principal
     fig = go.Figure()
     fig.add_trace(go.Scattergl(x=dfp["data_hora"], y=dfp["nivel_cm"] / 100, mode="lines",
                                name="Leituras (15 min)",
@@ -316,7 +316,7 @@ def main() -> None:
                                  line=dict(color=VERDE_FOLHA, width=2, dash="dash")))
         fig.add_vline(x=fim_dados, line=dict(color=VERDE_CLARO, dash="dot"))
     if trimestre is None:
-        # Faixas dos trimestres
+        # faixas dos trimestres
         for t in resumo.index:
             ini = pd.Timestamp(year=inicio_dados.year, month=3 * t - 2, day=1)
             fim_faixa = min(ini + pd.DateOffset(months=3), datas_prev[-1] + pd.Timedelta(days=1))
@@ -334,7 +334,7 @@ def main() -> None:
     fig.update_yaxes(gridcolor="#E3EED8")
     st.plotly_chart(fig, width="stretch")
 
-    # Comparativo entre trimestres
+    # comparativo entre trimestres
     st.subheader("Comparativo entre trimestres")
     nomes = [TRIMESTRES[t].split(" (")[0] + (" *" if resumo.loc[t, "parcial"] else "")
              for t in resumo.index]
@@ -389,7 +389,7 @@ def main() -> None:
     })
     st.dataframe(tabela, hide_index=True, width="stretch")
 
-    # Leituras suspeitas
+    # leituras suspeitas
     st.subheader("Ocorrências detectadas")
     if suspeitas.empty:
         st.info("Nenhuma leitura suspeita no período com os parâmetros atuais.")

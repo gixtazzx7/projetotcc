@@ -1,5 +1,5 @@
-# Baixa as leituras da ANA e salva em dados/rio_negro_manaus_<ano>.csv
-# Uso: python atualizar_dados_ana.py 2026
+# baixa as leituras da ana e salva em dados/rio_negro_manaus_<ano>.csv
+# uso: python atualizar_dados_ana.py 2026
 
 import calendar
 import sys
@@ -10,13 +10,13 @@ from pathlib import Path
 
 import pandas as pd
 
-ESTACAO = "14990000"  # Rio Negro - Manaus
+ESTACAO = "14990000"  # rio negro - manaus
 URL = ("https://telemetriaws1.ana.gov.br/ServiceANA.asmx/DadosHidrometeorologicos"
        "?codEstacao={est}&dataInicio={ini}&dataFim={fim}")
 PASTA_DADOS = Path(__file__).parent / "dados"
 
 
-# Baixa um mês
+# baixa um mês
 def baixar_mes(ano: int, mes: int, ate: date) -> list[tuple[str, str]]:
     ultimo = min(date(ano, mes, calendar.monthrange(ano, mes)[1]), ate)
     url = URL.format(est=ESTACAO, ini=f"01/{mes:02d}/{ano}", fim=ultimo.strftime("%d/%m/%Y"))
@@ -27,7 +27,7 @@ def baixar_mes(ano: int, mes: int, ate: date) -> list[tuple[str, str]]:
             for r in raiz.iter("DadosHidrometereologicos")]
 
 
-# Baixa o ano até a data dada
+# baixa o ano até a data dada
 def baixar_ano(ano: int, ate: date) -> pd.DataFrame:
     linhas = []
     for mes in range(1, ate.month + 1 if ate.year == ano else 13):
@@ -40,7 +40,7 @@ def baixar_ano(ano: int, ate: date) -> pd.DataFrame:
     return df.dropna().drop_duplicates("data_hora").sort_values("data_hora")
 
 
-# Salva o CSV
+# salva o csv
 def main() -> None:
     hoje = date.today()
     ano = int(sys.argv[1]) if len(sys.argv) > 1 else hoje.year

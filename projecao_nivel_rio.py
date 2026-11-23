@@ -1,4 +1,4 @@
-# Seção de previsão até 31/12 (dados de 2026)
+# seção de previsão até 31/12 (dados de 2026)
 
 import pandas as pd
 
@@ -10,7 +10,7 @@ from simulacao_nivel_rio import (
 FIM_PROJECAO = pd.Timestamp("2026-12-31")
 
 
-# Série real e previsão até 31/12
+# série real e previsão até 31/12
 def calcular_previsao() -> tuple[pd.Series, pd.Series]:
     serie = niveis_diarios(detectar_suspeitas(carregar_leituras()))
     passos = (FIM_PROJECAO - serie.index[-1]).days
@@ -18,7 +18,7 @@ def calcular_previsao() -> tuple[pd.Series, pd.Series]:
     return serie, pd.Series(prever_nivel(serie, passos), index=datas)
 
 
-# Mostra a seção de previsão
+# mostra a seção de previsão
 def mostrar_previsao() -> None:
     import plotly.graph_objects as go
     import streamlit as st
@@ -56,7 +56,7 @@ def mostrar_previsao() -> None:
         font=dict(color=VERDE_FLORESTA), title_font=dict(color=VERDE_FLORESTA),
     )
 
-    # Gráfico da previsão
+    # gráfico da previsão
     obs = serie.loc[inicio - pd.Timedelta(days=desde):]
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=obs.index, y=obs / 100, mode="lines", name="2026 (dados reais)",
@@ -71,7 +71,7 @@ def mostrar_previsao() -> None:
     fig.update_yaxes(gridcolor="#E3EED8")
     st.plotly_chart(fig, width="stretch")
 
-    # Tabela semanal
+    # tabela semanal
     st.subheader("Previsão semana a semana")
     semanas = proj.index[(proj.index - proj.index[0]).days % 7 == 6].union([proj.index[-1]])
     st.dataframe(pd.DataFrame({
