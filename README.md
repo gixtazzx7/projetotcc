@@ -11,7 +11,7 @@ servidor → painel).
    Na instalação, marque **"Add Python to PATH"**.
 2. Baixe o projeto: no GitHub, clique em **Code → Download ZIP** e extraia a pasta
    (ou use `git clone https://github.com/gixtazzx7/projetotcc.git`).
-3. Dê dois cliques em **`open_the_tcheka.bat`**.
+3. Dê dois cliques em **`abrir_painel.bat`**.
    - Na primeira vez, ele instala as bibliotecas (precisa de internet, leva alguns minutos).
    - Depois, o painel abre sozinho no navegador em <http://localhost:8501>.
 4. Para fechar, feche a janela preta (ou aperte Ctrl+C nela).
@@ -36,7 +36,7 @@ python -m streamlit run simulacao_nivel_rio.py
 | `dados/` | Leituras reais de 2026 usadas pelo painel |
 | `imagens/` | Logo e foto de fundo |
 | `.streamlit/config.toml` | Cores do tema |
-| `open_the_tcheka.bat` | Abre o painel com dois cliques no Windows |
+| `abrir_painel.bat` | Abre o painel com dois cliques no Windows |
 | `simulacao_nivel_rio_v1.py`, `_v2.py` | Versões antigas, com dados fictícios |
 
 Os dados são históricos, não medições em tempo real.
