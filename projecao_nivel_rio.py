@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-from simulacao_nivel_rio import (
+from projeto import (
     AGUA_RIO, ESTACAO, URUCUM, VERDE_CLARO, VERDE_FLORESTA, VERDE_FOLHA,
     carregar_leituras, detectar_suspeitas, metros, niveis_diarios, prever_nivel,
 )
