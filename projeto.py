@@ -25,6 +25,22 @@ REGISTROS_PORTO = [
 ]
 
 
+# gráficos: arrastar move para os lados, sem zoom pela roda do mouse nem por seleção
+CONFIG_GRAFICO = {"scrollZoom": False, "doubleClick": "autosize", "displaylogo": False,
+                  "modeBarButtonsToRemove": ["zoom2d", "zoomIn2d", "zoomOut2d", "select2d",
+                                             "lasso2d", "autoScale2d"]}
+
+
+# deixa o gráfico só arrastável na horizontal; janela é o trecho mostrado ao abrir
+def so_arrastar(fig, eixo_x_fixo: bool = False, janela=None):
+    fig.update_layout(dragmode="pan")
+    fig.update_xaxes(fixedrange=eixo_x_fixo)
+    fig.update_yaxes(fixedrange=True)
+    if janela is not None:
+        fig.update_xaxes(range=list(janela))
+    return fig
+
+
 # converte cm em texto em metros
 def metros(cm: float, sinal: bool = False) -> str:
     texto = f"{cm / 100:+.2f}" if sinal else f"{cm / 100:.2f}"
@@ -150,6 +166,14 @@ h2, h3 {{ color: {VERDE_FOLHA} !important; }}
     background-color: {VERDE_FLORESTA};
     color: #FFFFFF;
 }}
+.faixa-estacao {{
+    background: {VERDE_FLORESTA};
+    color: #FFFFFF;
+    font-weight: 600;
+    padding: .8rem 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}}
 .st-key-caixa_assistente {{ margin-top: 1rem; }}
 .st-key-botao_assistente button {{
     border-radius: 0 !important;
@@ -269,8 +293,7 @@ def main() -> None:
     resumo = resumo_trimestres(diario, df)
     inicio_dados, fim_dados = df["data_hora"].iloc[0], df["data_hora"].iloc[-1]
 
-    st.info(f"**DADOS HISTÓRICOS REAIS - {ESTACAO}**, telemetria de "
-            f"{inicio_dados:%d/%m/%Y} a {fim_dados:%d/%m/%Y}. Não são medições em tempo real.")
+    st.markdown(f'<div class="faixa-estacao">{ESTACAO}</div>', unsafe_allow_html=True)
     st.title("Monitoramento do nível do rio")
     st.caption(
         "Leituras reais (a cada 15 minutos) processadas como na etapa de servidor da arquitetura "
@@ -359,7 +382,14 @@ def main() -> None:
     )
     fig.update_xaxes(gridcolor="#E3EED8")
     fig.update_yaxes(gridcolor="#E3EED8")
-    st.plotly_chart(fig, width="stretch")
+    # no ano inteiro abre nos últimos 4 meses; arrastar para a esquerda mostra o resto
+    fim_grafico = (datas_prev[-1] if mostra_previsao else diap.index[-1]) + pd.Timedelta(days=1)
+    janela = (fim_grafico - pd.Timedelta(days=120), fim_grafico) if trimestre is None else None
+    st.plotly_chart(so_arrastar(fig, janela=janela), width="stretch",
+                    config=CONFIG_GRAFICO)
+    if janela is not None:
+        st.caption("Arraste o gráfico para a esquerda para ver os meses anteriores. "
+                   "Dois cliques voltam ao ano inteiro.")
 
     # comparativo entre trimestres
     st.subheader("Comparativo entre trimestres")
@@ -383,7 +413,7 @@ def main() -> None:
                        **layout_comp)
     comp.update_yaxes(range=[resumo["minimo"].min() / 100 * 0.85, resumo["maximo"].max() / 100 * 1.05],
                       gridcolor="#E3EED8")
-    g1.plotly_chart(comp, width="stretch")
+    g1.plotly_chart(so_arrastar(comp, True), width="stretch", config=CONFIG_GRAFICO)
 
     var = go.Figure(go.Bar(
         x=nomes, y=resumo["variacao"] / 100, showlegend=False,
@@ -398,7 +428,7 @@ def main() -> None:
     var.update_yaxes(range=[min(resumo["variacao"].min(), 0) / 100 * 1.4 - 0.5,
                             max(resumo["variacao"].max(), 0) / 100 * 1.4 + 0.5],
                      zeroline=True, zerolinecolor=VERDE_FLORESTA, gridcolor="#E3EED8")
-    g2.plotly_chart(var, width="stretch")
+    g2.plotly_chart(so_arrastar(var, True), width="stretch", config=CONFIG_GRAFICO)
     if resumo["parcial"].any():
         st.caption("* Trimestre parcial: dados até "
                    f"{resumo.loc[resumo['parcial'], 'data_fim'].iloc[-1]:%d/%m/%Y}.")
