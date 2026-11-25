@@ -3,8 +3,8 @@
 import pandas as pd
 
 from projeto import (
-    CONFIG_GRAFICO, ESTACAO, URUCUM, VERDE_FLORESTA, VERDE_FOLHA, barra_navegacao,
-    carregar_leituras, detectar_suspeitas, metros, niveis_diarios, prever_nivel, travar_eixos,
+    ESTACAO, URUCUM, VERDE_FLORESTA, VERDE_FOLHA,
+    carregar_leituras, detectar_suspeitas, metros, niveis_diarios, prever_nivel,
 )
 
 FIM_PROJECAO = pd.Timestamp("2026-12-31")
@@ -58,9 +58,6 @@ def mostrar_previsao() -> None:
     # gráfico só com a previsão de dezembro
     ini_dez = pd.Timestamp(year=FIM_PROJECAO.year, month=12, day=1)
     dez = proj.loc[ini_dez:FIM_PROJECAO]
-    grafico = st.container()
-    janela = barra_navegacao(ini_dez, FIM_PROJECAO + pd.Timedelta(days=1), 15, "dezembro",
-                             abrir_no_fim=False)
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=dez.index, y=dez / 100, mode="lines+markers", name="Previsão",
                              line=dict(color=VERDE_FOLHA, width=2.5, dash="dash"),
@@ -70,7 +67,8 @@ def mostrar_previsao() -> None:
     fig.update_layout(title=f"Previsão para dezembro de {FIM_PROJECAO.year}", height=460, **layout)
     fig.update_xaxes(gridcolor="#E3EED8", dtick="D2", tickformat="%d/%m")
     fig.update_yaxes(gridcolor="#E3EED8")
-    grafico.plotly_chart(travar_eixos(fig, janela), width="stretch", config=CONFIG_GRAFICO)
+    from rolagem import mostrar_rolavel
+    mostrar_rolavel(fig, ini_dez, FIM_PROJECAO + pd.Timedelta(days=1), 15, abrir_no_fim=False)
 
     # tabela semanal
     st.subheader("Previsão semana a semana")

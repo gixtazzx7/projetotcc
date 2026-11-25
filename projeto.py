@@ -42,22 +42,6 @@ def travar_eixos(fig, janela=None):
     return fig
 
 
-# barra para navegar por um período (celular e navegador); devolve o trecho a mostrar
-def barra_navegacao(ini: pd.Timestamp, fim: pd.Timestamp, dias: int, chave: str,
-                    abrir_no_fim: bool = True):
-    import streamlit as st
-
-    largura = pd.Timedelta(days=dias)
-    if fim - ini <= largura:
-        return ini, fim
-    ultimo_inicio = (fim - largura).date()
-    inicio = st.slider("Navegar pelo período", min_value=ini.date(), max_value=ultimo_inicio,
-                       value=ultimo_inicio if abrir_no_fim else ini.date(),
-                       step=pd.Timedelta(days=1).to_pytimedelta(), format="DD/MM/YYYY",
-                       key=f"barra_{chave}", label_visibility="collapsed")
-    return pd.Timestamp(inicio), pd.Timestamp(inicio) + largura
-
-
 # converte cm em texto em metros
 def metros(cm: float, sinal: bool = False) -> str:
     texto = f"{cm / 100:+.2f}" if sinal else f"{cm / 100:.2f}"
@@ -191,8 +175,6 @@ h2, h3 {{ color: {VERDE_FOLHA} !important; }}
     border-radius: 8px;
     margin-bottom: 1rem;
 }}
-[class*="st-key-barra_"] [data-testid="stSliderThumbValue"],
-[class*="st-key-barra_"] [data-testid="stSliderTickBar"] {{ display: none; }}
 .st-key-caixa_assistente {{ margin-top: 1rem; }}
 .st-key-botao_assistente button {{
     border-radius: 0 !important;
@@ -378,7 +360,7 @@ def main() -> None:
         fig.add_trace(go.Scatter(
             x=list(x_prev) + list(x_prev[::-1]),
             y=list((previsao + erro) / 100) + list(((previsao - erro) / 100)[::-1]),
-            fill="toself", fillcolor="rgba(46,125,50,0.18)", line=dict(width=0),
+            fill="toself", fillcolor="rgba(46,125,50,0.18)", line=dict(width=0), mode="lines",
             name=f"Margem (±{erro:.1f} cm)", hoverinfo="skip"))
         fig.add_trace(go.Scatter(x=x_prev, y=previsao / 100, mode="lines",
                                  name=f"Previsão ({dias_prev} dias)",
@@ -401,14 +383,12 @@ def main() -> None:
     )
     fig.update_xaxes(gridcolor="#E3EED8")
     fig.update_yaxes(gridcolor="#E3EED8")
-    # barra para navegar pelo período, sem sair de 2026
-    grafico = st.container()
+    # gráfico com barra de rolagem horizontal, sem sair de 2026
+    from rolagem import mostrar_rolavel
     ini_grafico = (pd.Timestamp(year=inicio_dados.year, month=1, day=1) if trimestre is None
                    else diap.index[0])
     fim_grafico = (datas_prev[-1] if mostra_previsao else diap.index[-1]) + pd.Timedelta(days=1)
-    janela = barra_navegacao(ini_grafico, fim_grafico, 90 if trimestre is None else 30,
-                             f"tri{trimestre or 0}")
-    grafico.plotly_chart(travar_eixos(fig, janela), width="stretch", config=CONFIG_GRAFICO)
+    mostrar_rolavel(fig, ini_grafico, fim_grafico, 90 if trimestre is None else 30)
 
     # comparativo entre trimestres
     st.subheader("Comparativo entre trimestres")
