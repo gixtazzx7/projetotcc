@@ -150,19 +150,13 @@ h2, h3 {{ color: {VERDE_FOLHA} !important; }}
     background-color: {VERDE_FLORESTA};
     color: #FFFFFF;
 }}
-.st-key-caixa_assistente {{
-    border: 2px solid {VERDE_CLARO};
-    border-radius: 0;
-    padding: .6rem;
-    margin-top: 1rem;
-    background: rgba(0, 0, 0, .25);
-}}
+.st-key-caixa_assistente {{ margin-top: 1rem; }}
 .st-key-botao_assistente button {{
     border-radius: 0 !important;
-    background-color: #000000 !important;
-    border: 1px solid {VERDE_CLARO} !important;
-    font-family: "Courier New", Consolas, monospace;
+    background-color: {VERDE_FLORESTA} !important;
+    border: 2px solid {VERDE_FLORESTA} !important;
 }}
+.st-key-botao_assistente button:hover {{ background-color: {VERDE_FOLHA} !important; }}
 </style>
 """
 
