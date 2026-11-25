@@ -419,15 +419,7 @@ def mostrar_assistente() -> None:
     serie, proj = st.cache_data(calcular_previsao)()
     erro = st.cache_data(erro_da_previsao)(serie, 7)
 
-    st.title("Pergunte sobre o rio")
-    st.caption(
-        f"Faça uma pergunta em português sobre o nível do Rio Negro em {ANO}. As respostas usam "
-        f"os dados reais da {ESTACAO} até {data_br(serie.index[-1])} e a previsão do painel até "
-        f"{data_br(proj.index[-1])}. O assistente entende meses, datas (15/09, amanhã, daqui a 10 "
-        "dias), trimestres, semestres, comparação entre dois meses e palavras como maior, menor, "
-        "subir e descer. Ele não usa inteligência artificial externa: as respostas saem de regras "
-        "simples aplicadas aos mesmos números dos gráficos."
-    )
+    st.title("pergunte sobre o nivel do rio")
 
     if "conversa" not in st.session_state:
         st.session_state.conversa = []
@@ -438,7 +430,7 @@ def mostrar_assistente() -> None:
     def limpar():
         st.session_state.conversa = []
 
-    st.write("Exemplos (ou escreva a sua pergunta na caixa verde no fim da página):")
+    st.write("Exemplos:")
     colunas = st.columns(3)
     clicada = None
     for i, ex in enumerate(EXEMPLOS):
@@ -459,6 +451,3 @@ def mostrar_assistente() -> None:
         b1, b2, _ = st.columns([1, 1, 2])
         b1.button("Apagar última pergunta", on_click=apagar_ultima, width="stretch")
         b2.button("Limpar conversa", on_click=limpar, width="stretch")
-
-    st.caption("As respostas repetem o que os gráficos mostram e não são previsão oficial. "
-               "Para decisões, consulte os boletins da ANA e do Porto de Manaus.")
