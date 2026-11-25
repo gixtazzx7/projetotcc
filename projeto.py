@@ -25,16 +25,17 @@ REGISTROS_PORTO = [
 ]
 
 
-# gráficos: arrastar move para os lados, sem zoom pela roda do mouse nem por seleção
-CONFIG_GRAFICO = {"scrollZoom": False, "doubleClick": "autosize", "displaylogo": False,
-                  "modeBarButtonsToRemove": ["zoom2d", "zoomIn2d", "zoomOut2d", "select2d",
-                                             "lasso2d", "autoScale2d"]}
+# gráficos sem zoom: a navegação pelo ano é feita pela barra abaixo do gráfico
+CONFIG_GRAFICO = {"scrollZoom": False, "doubleClick": False, "displayModeBar": False,
+                  "modeBarButtonsToRemove": ["zoom2d", "pan2d", "zoomIn2d", "zoomOut2d",
+                                             "select2d", "lasso2d", "autoScale2d",
+                                             "resetScale2d"]}
 
 
-# deixa o gráfico só arrastável na horizontal; janela é o trecho mostrado ao abrir
-def so_arrastar(fig, eixo_x_fixo: bool = False, janela=None):
-    fig.update_layout(dragmode="pan")
-    fig.update_xaxes(fixedrange=eixo_x_fixo)
+# trava os eixos (sem zoom nem arraste); janela é o trecho de datas mostrado
+def travar_eixos(fig, janela=None):
+    fig.update_layout(dragmode=False)
+    fig.update_xaxes(fixedrange=True)
     fig.update_yaxes(fixedrange=True)
     if janela is not None:
         fig.update_xaxes(range=list(janela))
@@ -382,14 +383,25 @@ def main() -> None:
     )
     fig.update_xaxes(gridcolor="#E3EED8")
     fig.update_yaxes(gridcolor="#E3EED8")
-    # no ano inteiro abre nos últimos 4 meses; arrastar para a esquerda mostra o resto
-    fim_grafico = (datas_prev[-1] if mostra_previsao else diap.index[-1]) + pd.Timedelta(days=1)
-    janela = (fim_grafico - pd.Timedelta(days=120), fim_grafico) if trimestre is None else None
-    st.plotly_chart(so_arrastar(fig, janela=janela), width="stretch",
-                    config=CONFIG_GRAFICO)
-    if janela is not None:
-        st.caption("Arraste o gráfico para a esquerda para ver os meses anteriores. "
-                   "Dois cliques voltam ao ano inteiro.")
+    # barra para navegar pelo ano de 2026 (só no ano inteiro)
+    grafico = st.container()
+    janela = None
+    if trimestre is None:
+        ini_ano = pd.Timestamp(year=inicio_dados.year, month=1, day=1)
+        fim_grafico = (datas_prev[-1] if mostra_previsao else diap.index[-1]) + pd.Timedelta(days=1)
+        ano_todo = st.toggle("Mostrar o ano inteiro", value=False)
+        if ano_todo:
+            janela = (ini_ano, fim_grafico)
+        else:
+            largura = pd.Timedelta(days=90)
+            ultimo_inicio = (fim_grafico - largura).date()
+            inicio = st.slider("Navegar pelo ano de 2026", min_value=ini_ano.date(),
+                               max_value=ultimo_inicio, value=ultimo_inicio,
+                               step=pd.Timedelta(days=1).to_pytimedelta(), format="DD/MM/YYYY",
+                               help="Arraste para ver outros meses de 2026.")
+            janela = (pd.Timestamp(inicio), pd.Timestamp(inicio) + largura)
+            st.caption(f"Mostrando de {janela[0]:%d/%m} a {janela[1]:%d/%m/%Y}.")
+    grafico.plotly_chart(travar_eixos(fig, janela), width="stretch", config=CONFIG_GRAFICO)
 
     # comparativo entre trimestres
     st.subheader("Comparativo entre trimestres")
@@ -413,7 +425,7 @@ def main() -> None:
                        **layout_comp)
     comp.update_yaxes(range=[resumo["minimo"].min() / 100 * 0.85, resumo["maximo"].max() / 100 * 1.05],
                       gridcolor="#E3EED8")
-    g1.plotly_chart(so_arrastar(comp, True), width="stretch", config=CONFIG_GRAFICO)
+    g1.plotly_chart(travar_eixos(comp), width="stretch", config=CONFIG_GRAFICO)
 
     var = go.Figure(go.Bar(
         x=nomes, y=resumo["variacao"] / 100, showlegend=False,
@@ -428,7 +440,7 @@ def main() -> None:
     var.update_yaxes(range=[min(resumo["variacao"].min(), 0) / 100 * 1.4 - 0.5,
                             max(resumo["variacao"].max(), 0) / 100 * 1.4 + 0.5],
                      zeroline=True, zerolinecolor=VERDE_FLORESTA, gridcolor="#E3EED8")
-    g2.plotly_chart(so_arrastar(var, True), width="stretch", config=CONFIG_GRAFICO)
+    g2.plotly_chart(travar_eixos(var), width="stretch", config=CONFIG_GRAFICO)
     if resumo["parcial"].any():
         st.caption("* Trimestre parcial: dados até "
                    f"{resumo.loc[resumo['parcial'], 'data_fim'].iloc[-1]:%d/%m/%Y}.")

@@ -4,7 +4,7 @@ import pandas as pd
 
 from projeto import (
     AGUA_RIO, CONFIG_GRAFICO, ESTACAO, URUCUM, VERDE_CLARO, VERDE_FLORESTA, VERDE_FOLHA,
-    carregar_leituras, detectar_suspeitas, metros, niveis_diarios, prever_nivel, so_arrastar,
+    carregar_leituras, detectar_suspeitas, metros, niveis_diarios, prever_nivel, travar_eixos,
 )
 
 FIM_PROJECAO = pd.Timestamp("2026-12-31")
@@ -69,7 +69,7 @@ def mostrar_previsao() -> None:
                       height=460, **layout)
     fig.update_xaxes(gridcolor="#E3EED8")
     fig.update_yaxes(gridcolor="#E3EED8")
-    st.plotly_chart(so_arrastar(fig), width="stretch",
+    st.plotly_chart(travar_eixos(fig), width="stretch",
                     config=CONFIG_GRAFICO)
 
     # tabela semanal
