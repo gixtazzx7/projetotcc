@@ -1,6 +1,7 @@
 # assistente simples: responde perguntas em português sobre o nível do rio
 # usando os dados reais da ana e a previsão até 31/12 (sem ia externa, só regras)
 
+import difflib
 import re
 import unicodedata
 
@@ -21,22 +22,51 @@ TRIMESTRES = {"primeiro": 1, "1": 1, "segundo": 2, "2": 2, "terceiro": 3, "3": 3
 
 PALAVRAS_MAXIMO = ("maior", "maximo", "mais alto", "cheia", "pico", "subir mais")
 PALAVRAS_MINIMO = ("menor", "minimo", "mais baixo", "seca", "vazante", "baixar mais")
-PALAVRAS_FUTURO = ("vai", "previsao", "previsto", "proxim", "futuro", "sera", "ira", "daqui")
+PALAVRAS_FUTURO = ("vai ", "previsao", "previsto", "proxim", "futuro", "sera", "ira ", "daqui",
+                   "deve ", "vao ")
 
 EXEMPLOS = [
     "Como vai estar o rio em dezembro de 2026?",
     "Qual foi o maior nível do ano?",
     "Como estava o rio em 15/09?",
     "O rio vai subir até o fim do ano?",
-    "Como foi o terceiro trimestre?",
+    "Compare junho com dezembro",
     "Quando o rio vai estar mais baixo?",
 ]
 
 
-# tira acentos e deixa em minúsculo
+ABREVIACOES = {"jan": "janeiro", "fev": "fevereiro", "abr": "abril", "jun": "junho",
+               "jul": "julho", "ago": "agosto", "set": "setembro", "out": "outubro",
+               "nov": "novembro", "dez": "dezembro"}
+NUMEROS = {"um": 1, "uma": 1, "dois": 2, "duas": 2, "tres": 3, "quatro": 4, "cinco": 5,
+           "seis": 6, "sete": 7, "oito": 8, "nove": 9, "dez": 10, "quinze": 15, "trinta": 30}
+
+
+# corrige uma palavra parecida com nome de mês (ex.: "dezenbro", "fevereiro")
+def corrigir_palavra(p: str) -> str:
+    if p in ABREVIACOES:
+        return ABREVIACOES[p]
+    if len(p) >= 5 and p not in MESES:
+        parecida = difflib.get_close_matches(p, MESES, n=1, cutoff=0.8)
+        if parecida:
+            return parecida[0]
+    return p
+
+
+# tira acentos, deixa em minúsculo e corrige os meses
 def normalizar(texto: str) -> str:
     sem_acento = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
-    return re.sub(r"\s+", " ", sem_acento.lower()).strip()
+    sem_acento = re.sub(r"[^\w/ ]", " ", sem_acento.lower())
+    palavras = [corrigir_palavra(p) for p in sem_acento.split()]
+    # "dez dias" é número, não dezembro
+    palavras = ["dez" if p == "dezembro" and o == "dez" and i + 1 < len(palavras)
+                and palavras[i + 1].startswith(("dia", "semana")) else p
+                for i, (p, o) in enumerate(zip(palavras, sem_acento.split()))]
+    return " ".join(palavras)
+
+
+def numero(texto: str) -> int:
+    return int(texto) if texto.isdigit() else NUMEROS.get(texto, 1)
 
 
 def data_br(d: pd.Timestamp) -> str:
@@ -97,11 +127,60 @@ def interpretar(pergunta: str, ultimo_real: pd.Timestamp, fim_previsao: pd.Times
     if re.search(r"\bultim[oa] (dado|leitura|medicao|registro)\b", t):
         return ultimo_real, ultimo_real, data_br(ultimo_real), foco
 
-    if re.search(r"\bproxim[oa]s? (\d+ )?(dias|semana)\b|semana que vem", t):
+    hoje = (hoje or pd.Timestamp.today()).normalize()
+    if not (pd.Timestamp(year=ANO, month=1, day=1) <= hoje <= fim_previsao):
+        hoje = ultimo_real
+    for palavra, desloc in (("anteontem", -2), ("ontem", -1), ("amanha", 1)):
+        if re.search(rf"\b{palavra}\b", t) and not re.search(r"\bdepois de amanha\b", t):
+            d = hoje + pd.Timedelta(days=desloc)
+            return d, d, f"{palavra.replace('amanha', 'amanhã')} ({data_br(d)})", foco
+    if re.search(r"\bdepois de amanha\b", t):
+        d = hoje + pd.Timedelta(days=2)
+        return d, d, f"depois de amanhã ({data_br(d)})", foco
+
+    m = re.search(r"\b(?:daqui a|daqui|em|dentro de) (\d+|\w+) (dia|semana|mes)", t)
+    if m and m.group(1) in NUMEROS or (m and m.group(1).isdigit()):
+        n = numero(m.group(1)) * {"dia": 1, "semana": 7, "mes": 30}[m.group(2)]
+        d = hoje + pd.Timedelta(days=n)
+        return d, d, f"daqui a {n} dias ({data_br(d)})", foco
+
+    m = re.search(r"\bultim[oa]s (\d+|\w+) (dias|semanas)", t)
+    if m:
+        n = numero(m.group(1)) * (7 if m.group(2) == "semanas" else 1)
+        return (ultimo_real - pd.Timedelta(days=n - 1), ultimo_real,
+                f"os últimos {n} dias com dados reais", foco)
+    if re.search(r"\bsemana passada\b", t):
+        return (hoje - pd.Timedelta(days=7), hoje - pd.Timedelta(days=1),
+                "a semana passada", foco)
+
+    mes_hoje = pd.Timestamp(year=hoje.year, month=hoje.month, day=1)
+    relativos = {r"\b(mes que vem|proximo mes)\b": 1, r"\b(mes passado|ultimo mes)\b": -1,
+                 r"\b(este|esse|neste|nesse) mes\b|\bmes atual\b": 0}
+    for padrao, desloc in relativos.items():
+        if re.search(padrao, t):
+            ini = mes_hoje + pd.DateOffset(months=desloc)
+            if ini.year != ANO:
+                return f"O painel só tem dados de {ANO}."
+            return (ini, ini + pd.offsets.MonthEnd(),
+                    f"{NOMES_MESES[ini.month]} de {ANO}", foco)
+
+    m = re.search(r"\b(primeiro|segundo|1|2)[oº]? semestre", t)
+    if m:
+        sem = 1 if m.group(1) in ("primeiro", "1") else 2
+        ini = pd.Timestamp(year=ANO, month=6 * sem - 5, day=1)
+        return ini, ini + pd.DateOffset(months=6) - pd.Timedelta(days=1), \
+            f"o {sem}º semestre de {ANO}", foco
+
+    # dois meses: comparação
+    nomes_achados = list(dict.fromkeys(re.findall(rf"\b({'|'.join(MESES)})\b", t)))
+    if len(nomes_achados) >= 2:
+        return "comparar", MESES[nomes_achados[0]], MESES[nomes_achados[1]]
+
+    if re.search(r"\bproxim[oa]s? (\w+ )?(dias|semanas?)\b|semana que vem", t):
         n = 7
-        m = re.search(r"proxim[oa]s? (\d+) dias", t)
+        m = re.search(r"proxim[oa]s? (\w+) (dias|semanas)", t)
         if m:
-            n = int(m.group(1))
+            n = numero(m.group(1)) * (7 if m.group(2) == "semanas" else 1)
         ini = ultimo_real + pd.Timedelta(days=1)
         fim = min(ultimo_real + pd.Timedelta(days=n), fim_previsao)
         return ini, fim, f"os próximos {(fim - ini).days + 1} dias após o último dado real", foco
@@ -132,7 +211,14 @@ def interpretar(pergunta: str, ultimo_real: pd.Timestamp, fim_previsao: pd.Times
         fim = ini + pd.DateOffset(months=3) - pd.Timedelta(days=1)
         return ini, fim, f"o {tri}º trimestre de {ANO}", foco
 
+    explicacao = explicar(t, ultimo_real, fim_previsao)
+    if explicacao:
+        return explicacao
+
     # sem período: pergunta sobre o futuro usa a previsão; o resto usa o ano todo
+    if foco == "tendencia" and re.search(r"\b(esta|ta|anda|continua)\b", t):
+        ini, fim = ultimo_real - pd.Timedelta(days=13), ultimo_real + pd.Timedelta(days=14)
+        return ini, fim, "as duas semanas antes e as duas depois do último dado real", foco
     if tem(t, PALAVRAS_FUTURO):
         ini = ultimo_real + pd.Timedelta(days=1)
         return ini, fim_previsao, f"o período previsto ({data_br(ini)} a {data_br(fim_previsao)})", foco
@@ -140,6 +226,54 @@ def interpretar(pergunta: str, ultimo_real: pd.Timestamp, fim_previsao: pd.Times
         return pd.Timestamp(year=ANO, month=1, day=1), fim_previsao, f"o ano de {ANO}", foco
 
     return None
+
+
+# respostas fixas sobre o painel
+def explicar(t: str, ultimo_real: pd.Timestamp, fim_previsao: pd.Timestamp) -> str | None:
+    if re.search(r"\b(fonte|de onde|origem|quem mede|ana|estacao|sensor|telemetria)\b", t):
+        return (f"Os dados são da estação {ESTACAO}, da Agência Nacional de Águas (ANA). São "
+                f"leituras de telemetria a cada 15 minutos, de 01/01 a {data_br(ultimo_real)}, "
+                "sem consistência oficial. O painel tira as leituras suspeitas e usa a média de "
+                "cada dia.")
+    if re.search(r"\b(como funciona|modelo|regressao|calcul|confiavel|confianca|erro|precis)", t):
+        return ("A previsão usa regressão linear: o modelo estima a média de um dia a partir das "
+                "médias dos 7 dias anteriores, e cada dia previsto vira entrada do dia seguinte, "
+                f"até {data_br(fim_previsao)}. No teste com os últimos 7 dias reais o erro médio "
+                "ficou em torno de 13 cm. Como só há um ano de dados, o modelo segue a tendência "
+                "recente e não conhece o ciclo anual do rio, então o erro cresce com a distância.")
+    if re.search(r"\b(suspeit|filtro|mad|mediana|outlier|erro de leitura)", t):
+        return ("Uma leitura é marcada como suspeita quando fica longe demais da mediana das "
+                "leituras vizinhas (janela de 13 leituras). O limite é k vezes o MAD, o desvio "
+                "mediano da janela, com k = 5 por padrão. Essas leituras saem das médias diárias.")
+    if re.search(r"\b(porto|regua)\b", t):
+        return ("Os registros do Porto de Manaus aparecem só para comparação. A régua do porto é "
+                "diferente da régua da estação da ANA, então os valores ficam próximos mas não "
+                "iguais.")
+    if re.search(r"^(oi|ola|bom dia|boa tarde|boa noite|e ai|opa)\b", t):
+        return ("Olá. Pergunte sobre o nível do Rio Negro em Manaus em 2026, citando um mês, uma "
+                "data ou um período. Por exemplo: \"" + EXEMPLOS[0] + "\"")
+    if re.search(r"\b(obrigad|valeu)", t):
+        return "De nada."
+    return None
+
+
+# compara a média de dois meses
+def comparar_meses(m1: int, m2: int, completa: pd.Series, ultimo_real: pd.Timestamp) -> str:
+    frases, medias = [], []
+    for m in (m1, m2):
+        ini = pd.Timestamp(year=ANO, month=m, day=1)
+        s = completa.loc[ini:ini + pd.offsets.MonthEnd()]
+        if s.empty:
+            return f"Não há dados nem previsão para {NOMES_MESES[m]} de {ANO}."
+        tipo = ("previsão" if s.index[0] > ultimo_real
+                else "dados reais" if s.index[-1] <= ultimo_real else "dados reais e previsão")
+        medias.append(s.mean())
+        frases.append(f"{NOMES_MESES[m]} tem média de {metros(s.mean())}, entre "
+                      f"{metros(s.min())} e {metros(s.max())} ({tipo})")
+    dif = medias[1] - medias[0]
+    comp = "mais alto" if dif > 0 else "mais baixo"
+    return (f"Em {ANO}, {frases[0]}. Já {frases[1]}. Na média, o rio em {NOMES_MESES[m2]} fica "
+            f"{metros(abs(dif))} {comp} que em {NOMES_MESES[m1]}.")
 
 
 # registros do porto no período (outra régua, só para comparação)
@@ -174,10 +308,14 @@ def responder(pergunta: str, serie: pd.Series, proj: pd.Series, erro_cm: float,
     r = interpretar(pergunta, ultimo_real, fim_previsao, hoje)
 
     if r is None:
-        return ("Não entendi o período da pergunta. Tente citar um mês, uma data ou um trimestre, "
-                "por exemplo: \"" + "\", \"".join(EXEMPLOS[:3]) + "\".")
+        return ("Não entendi a pergunta. Eu respondo sobre o nível do Rio Negro em 2026: cite um "
+                "mês, uma data (15/09, amanhã, daqui a 10 dias), um trimestre ou semestre, ou "
+                "dois meses para comparar. Também explico de onde vêm os dados e como funciona a "
+                "previsão.")
     if isinstance(r, str):
         return r
+    if r[0] == "comparar":
+        return comparar_meses(r[1], r[2], pd.concat([serie, proj]), ultimo_real)
 
     ini, fim, rotulo, foco = r
     if fim < inicio_dados or ini > fim_previsao:
@@ -266,37 +404,41 @@ def mostrar_assistente() -> None:
     st.caption(
         f"Faça uma pergunta em português sobre o nível do Rio Negro em {ANO}. As respostas usam "
         f"os dados reais da {ESTACAO} até {data_br(serie.index[-1])} e a previsão do painel até "
-        f"{data_br(proj.index[-1])}. O assistente reconhece meses, datas, trimestres e palavras "
-        "como maior, menor, subir e descer. Ele não usa inteligência artificial externa: as "
-        "respostas saem de regras simples aplicadas aos mesmos números dos gráficos."
+        f"{data_br(proj.index[-1])}. O assistente entende meses, datas (15/09, amanhã, daqui a 10 "
+        "dias), trimestres, semestres, comparação entre dois meses e palavras como maior, menor, "
+        "subir e descer. Ele não usa inteligência artificial externa: as respostas saem de regras "
+        "simples aplicadas aos mesmos números dos gráficos."
     )
 
     if "conversa" not in st.session_state:
         st.session_state.conversa = []
 
-    st.write("Exemplos:")
+    def apagar_ultima():
+        st.session_state.conversa = st.session_state.conversa[:-2]
+
+    def limpar():
+        st.session_state.conversa = []
+
+    st.write("Exemplos (ou escreva a sua pergunta na caixa no fim da página):")
     colunas = st.columns(3)
     clicada = None
     for i, ex in enumerate(EXEMPLOS):
         if colunas[i % 3].button(ex, key=f"ex{i}", width="stretch"):
             clicada = ex
 
+    pergunta = st.chat_input("Escreva sua pergunta, ex.: o rio vai subir em dezembro?") or clicada
+    if pergunta:
+        resposta = responder(pergunta, serie, proj, erro)
+        st.session_state.conversa += [("user", pergunta), ("assistant", resposta)]
+
     for papel, texto in st.session_state.conversa:
         with st.chat_message(papel):
             st.write(texto)
 
-    pergunta = st.chat_input("Ex.: como vai estar o rio em dezembro de 2026?") or clicada
-    if pergunta:
-        resposta = responder(pergunta, serie, proj, erro)
-        st.session_state.conversa += [("user", pergunta), ("assistant", resposta)]
-        with st.chat_message("user"):
-            st.write(pergunta)
-        with st.chat_message("assistant"):
-            st.write(resposta)
-
-    if st.session_state.conversa and st.sidebar.button("Limpar conversa"):
-        st.session_state.conversa = []
-        st.rerun()
+    if st.session_state.conversa:
+        b1, b2, _ = st.columns([1, 1, 2])
+        b1.button("Apagar última pergunta", on_click=apagar_ultima, width="stretch")
+        b2.button("Limpar conversa", on_click=limpar, width="stretch")
 
     st.caption("As respostas repetem o que os gráficos mostram e não são previsão oficial. "
                "Para decisões, consulte os boletins da ANA e do Porto de Manaus.")
