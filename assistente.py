@@ -2,6 +2,7 @@
 # usando os dados reais da ana e a previsão até 31/12 (sem ia externa, só regras)
 
 import difflib
+import html
 import re
 import unicodedata
 
@@ -390,6 +391,42 @@ def responder(pergunta: str, serie: pd.Series, proj: pd.Series, erro_cm: float,
     return texto + porto
 
 
+PROMPT = "C:\\RIO_NEGRO> "
+
+# visual de prompt de comando: fundo preto e letra de máquina de escrever
+CSS_TERMINAL = """
+<style>
+.terminal {
+    background: #000000; color: #C0C0C0;
+    font-family: "Courier New", Consolas, monospace; font-size: .95rem;
+    padding: 1rem; min-height: 260px; max-height: 520px; overflow-y: auto;
+    border: 2px solid #808080; border-radius: 0; white-space: pre-wrap;
+}
+.cmd-prompt { color: #00FF00; }
+.st-key-terminal, [data-testid="stForm"] {
+    background: #000000; border: 2px solid #808080; border-top: 0;
+    border-radius: 0; padding: .3rem 1rem .8rem 1rem;
+}
+[data-testid="stForm"] label p {
+    color: #00FF00 !important; font-family: "Courier New", Consolas, monospace;
+}
+[data-testid="stForm"] input {
+    background: #000000 !important; color: #FFFFFF !important;
+    font-family: "Courier New", Consolas, monospace; caret-color: #00FF00;
+    border-radius: 0 !important;
+}
+[data-testid="stForm"] [data-baseweb="input"] {
+    background: #000000 !important; border: 1px solid #404040 !important; border-radius: 0;
+}
+[data-testid="stForm"] button {
+    background: #000000 !important; color: #C0C0C0 !important;
+    border: 1px solid #808080 !important; border-radius: 0 !important;
+    font-family: "Courier New", Consolas, monospace;
+}
+</style>
+"""
+
+
 # tela do assistente no streamlit
 def mostrar_assistente() -> None:
     import streamlit as st
@@ -419,21 +456,37 @@ def mostrar_assistente() -> None:
     def limpar():
         st.session_state.conversa = []
 
-    st.write("Exemplos (ou escreva a sua pergunta na caixa no fim da página):")
+    def enviar(pergunta: str):
+        st.session_state.conversa += [("user", pergunta),
+                                      ("assistant", responder(pergunta, serie, proj, erro))]
+
+    st.write("Exemplos (ou escreva a sua pergunta no terminal abaixo):")
     colunas = st.columns(3)
     clicada = None
     for i, ex in enumerate(EXEMPLOS):
         if colunas[i % 3].button(ex, key=f"ex{i}", width="stretch"):
             clicada = ex
 
-    pergunta = st.chat_input("Escreva sua pergunta, ex.: o rio vai subir em dezembro?") or clicada
-    if pergunta:
-        resposta = responder(pergunta, serie, proj, erro)
-        st.session_state.conversa += [("user", pergunta), ("assistant", resposta)]
+    if clicada:
+        enviar(clicada)
 
+    # conversa em estilo prompt de comando
+    linhas = [f"Assistente do Rio Negro [versão TCC {ANO}]",
+              "Digite sua pergunta e aperte Enter.", ""]
     for papel, texto in st.session_state.conversa:
-        with st.chat_message(papel):
-            st.write(texto)
+        if papel == "user":
+            linhas.append(f'<span class="cmd-prompt">{PROMPT}</span>{html.escape(texto)}')
+        else:
+            linhas += [html.escape(texto), ""]
+    st.markdown(CSS_TERMINAL + '<div class="terminal">' + "<br>".join(linhas) + "</div>",
+                unsafe_allow_html=True)
+
+    with st.form("terminal", clear_on_submit=True, border=False):
+        texto = st.text_input(PROMPT, placeholder="como vai estar o rio em dezembro de 2026?",
+                              label_visibility="visible")
+        if st.form_submit_button("Enter") and texto.strip():
+            enviar(texto.strip())
+            st.rerun()
 
     if st.session_state.conversa:
         b1, b2, _ = st.columns([1, 1, 2])

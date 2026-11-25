@@ -150,6 +150,19 @@ h2, h3 {{ color: {VERDE_FOLHA} !important; }}
     background-color: {VERDE_FLORESTA};
     color: #FFFFFF;
 }}
+.st-key-caixa_assistente {{
+    border: 2px solid {VERDE_CLARO};
+    border-radius: 0;
+    padding: .6rem;
+    margin-top: 1rem;
+    background: rgba(0, 0, 0, .25);
+}}
+.st-key-botao_assistente button {{
+    border-radius: 0 !important;
+    background-color: #000000 !important;
+    border: 1px solid {VERDE_CLARO} !important;
+    font-family: "Courier New", Consolas, monospace;
+}}
 </style>
 """
 
@@ -222,12 +235,27 @@ def main() -> None:
         st.sidebar.image(recortar_logo(logo), width="stretch")
 
     st.sidebar.header("Período")
-    opcoes = ["Ano inteiro"] + list(TRIMESTRES.values()) + [PREVISAO, ASSISTENTE]
-    escolha = st.sidebar.radio("Mostrar", opcoes, index=0)
-    if escolha == ASSISTENTE:
+    opcoes = ["Ano inteiro"] + list(TRIMESTRES.values()) + [PREVISAO]
+    if "assistente_aberto" not in st.session_state:
+        st.session_state.assistente_aberto = False
+
+    def fechar_assistente():
+        st.session_state.assistente_aberto = False
+
+    def abrir_assistente():
+        st.session_state.assistente_aberto = True
+
+    escolha = st.sidebar.radio("Mostrar", opcoes, index=0, on_change=fechar_assistente)
+
+    # caixa separada do assistente
+    caixa = st.sidebar.container(key="caixa_assistente")
+    if st.session_state.assistente_aberto:
+        caixa.button("Voltar aos gráficos", key="botao_assistente",
+                     on_click=fechar_assistente, width="stretch")
         from assistente import mostrar_assistente
         mostrar_assistente()
         return
+    caixa.button(ASSISTENTE, key="botao_assistente", on_click=abrir_assistente, width="stretch")
     if escolha == PREVISAO:
         from projecao_nivel_rio import mostrar_previsao
         mostrar_previsao()
