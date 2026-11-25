@@ -50,16 +50,19 @@ def barra_navegacao(ini: pd.Timestamp, fim: pd.Timestamp, dias: int, chave: str,
     largura = pd.Timedelta(days=dias)
     if fim - ini <= largura:
         return ini, fim
+    # a barra fica logo abaixo do gráfico; o botão de ver tudo vem depois dela
+    lugar_barra = st.container()
     if st.toggle("Mostrar o período inteiro", value=False, key=f"todo_{chave}"):
         return ini, fim
     ultimo_inicio = (fim - largura).date()
-    inicio = st.slider("Navegar pelo período", min_value=ini.date(), max_value=ultimo_inicio,
-                       value=ultimo_inicio if abrir_no_fim else ini.date(),
-                       step=pd.Timedelta(days=1).to_pytimedelta(),
-                       format="DD/MM/YYYY", key=f"barra_{chave}",
-                       help="Arraste para ver outros dias do período.")
-    janela = (pd.Timestamp(inicio), pd.Timestamp(inicio) + largura)
-    st.caption(f"Mostrando de {janela[0]:%d/%m} a {janela[1]:%d/%m/%Y}.")
+    with lugar_barra:
+        inicio = st.slider("Arraste para navegar pelo período", min_value=ini.date(),
+                           max_value=ultimo_inicio,
+                           value=ultimo_inicio if abrir_no_fim else ini.date(),
+                           step=pd.Timedelta(days=1).to_pytimedelta(), format="DD/MM/YYYY",
+                           key=f"barra_{chave}")
+        janela = (pd.Timestamp(inicio), pd.Timestamp(inicio) + largura)
+        st.caption(f"Mostrando de {janela[0]:%d/%m} a {janela[1]:%d/%m/%Y}.")
     return janela
 
 
