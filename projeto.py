@@ -42,6 +42,27 @@ def travar_eixos(fig, janela=None):
     return fig
 
 
+# barra para navegar por um período (celular e navegador); devolve o trecho a mostrar
+def barra_navegacao(ini: pd.Timestamp, fim: pd.Timestamp, dias: int, chave: str,
+                    abrir_no_fim: bool = True):
+    import streamlit as st
+
+    largura = pd.Timedelta(days=dias)
+    if fim - ini <= largura:
+        return ini, fim
+    if st.toggle("Mostrar o período inteiro", value=False, key=f"todo_{chave}"):
+        return ini, fim
+    ultimo_inicio = (fim - largura).date()
+    inicio = st.slider("Navegar pelo período", min_value=ini.date(), max_value=ultimo_inicio,
+                       value=ultimo_inicio if abrir_no_fim else ini.date(),
+                       step=pd.Timedelta(days=1).to_pytimedelta(),
+                       format="DD/MM/YYYY", key=f"barra_{chave}",
+                       help="Arraste para ver outros dias do período.")
+    janela = (pd.Timestamp(inicio), pd.Timestamp(inicio) + largura)
+    st.caption(f"Mostrando de {janela[0]:%d/%m} a {janela[1]:%d/%m/%Y}.")
+    return janela
+
+
 # converte cm em texto em metros
 def metros(cm: float, sinal: bool = False) -> str:
     texto = f"{cm / 100:+.2f}" if sinal else f"{cm / 100:.2f}"
@@ -383,24 +404,13 @@ def main() -> None:
     )
     fig.update_xaxes(gridcolor="#E3EED8")
     fig.update_yaxes(gridcolor="#E3EED8")
-    # barra para navegar pelo ano de 2026 (só no ano inteiro)
+    # barra para navegar pelo período, sem sair de 2026
     grafico = st.container()
-    janela = None
-    if trimestre is None:
-        ini_ano = pd.Timestamp(year=inicio_dados.year, month=1, day=1)
-        fim_grafico = (datas_prev[-1] if mostra_previsao else diap.index[-1]) + pd.Timedelta(days=1)
-        ano_todo = st.toggle("Mostrar o ano inteiro", value=False)
-        if ano_todo:
-            janela = (ini_ano, fim_grafico)
-        else:
-            largura = pd.Timedelta(days=90)
-            ultimo_inicio = (fim_grafico - largura).date()
-            inicio = st.slider("Navegar pelo ano de 2026", min_value=ini_ano.date(),
-                               max_value=ultimo_inicio, value=ultimo_inicio,
-                               step=pd.Timedelta(days=1).to_pytimedelta(), format="DD/MM/YYYY",
-                               help="Arraste para ver outros meses de 2026.")
-            janela = (pd.Timestamp(inicio), pd.Timestamp(inicio) + largura)
-            st.caption(f"Mostrando de {janela[0]:%d/%m} a {janela[1]:%d/%m/%Y}.")
+    ini_grafico = (pd.Timestamp(year=inicio_dados.year, month=1, day=1) if trimestre is None
+                   else diap.index[0])
+    fim_grafico = (datas_prev[-1] if mostra_previsao else diap.index[-1]) + pd.Timedelta(days=1)
+    janela = barra_navegacao(ini_grafico, fim_grafico, 90 if trimestre is None else 30,
+                             f"tri{trimestre or 0}")
     grafico.plotly_chart(travar_eixos(fig, janela), width="stretch", config=CONFIG_GRAFICO)
 
     # comparativo entre trimestres
