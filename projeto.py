@@ -15,6 +15,7 @@ ESTACAO = "ANA 14990000 - Rio Negro em Manaus"
 TRIMESTRES = {1: "1º trimestre (jan–mar)", 2: "2º trimestre (abr–jun)",
               3: "3º trimestre (jul–set)", 4: "4º trimestre (out–dez)"}
 PREVISAO = "Previsão (até 31/12)"
+ASSISTENTE = "Pergunte sobre o rio"
 
 # registros do porto de manaus (só para comparação)
 REGISTROS_PORTO = [
@@ -221,8 +222,12 @@ def main() -> None:
         st.sidebar.image(recortar_logo(logo), width="stretch")
 
     st.sidebar.header("Período")
-    opcoes = ["Ano inteiro"] + list(TRIMESTRES.values()) + [PREVISAO]
+    opcoes = ["Ano inteiro"] + list(TRIMESTRES.values()) + [PREVISAO, ASSISTENTE]
     escolha = st.sidebar.radio("Mostrar", opcoes, index=0)
+    if escolha == ASSISTENTE:
+        from assistente import mostrar_assistente
+        mostrar_assistente()
+        return
     if escolha == PREVISAO:
         from projecao_nivel_rio import mostrar_previsao
         mostrar_previsao()
