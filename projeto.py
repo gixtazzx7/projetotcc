@@ -15,6 +15,7 @@ ESTACAO = "ANA 14990000 - Rio Negro em Manaus"
 TRIMESTRES = {1: "1º trimestre (jan–mar)", 2: "2º trimestre (abr–jun)",
               3: "3º trimestre (jul–set)", 4: "4º trimestre (out–dez)"}
 PREVISAO = "Previsão (até 31/12)"
+ASSISTENTE = "pergunte sobre o nivel do rio"
 
 # registros do porto de manaus (só para comparação)
 REGISTROS_PORTO = [
@@ -22,6 +23,23 @@ REGISTROS_PORTO = [
     ("2026-06-01", 27.95), ("2026-06-21", 28.51), ("2026-06-28", 28.51),
     ("2026-10-01", 18.73), ("2026-10-27", 16.59),
 ]
+
+
+# gráficos sem zoom: a navegação pelo ano é feita pela barra abaixo do gráfico
+CONFIG_GRAFICO = {"scrollZoom": False, "doubleClick": False, "displayModeBar": False,
+                  "modeBarButtonsToRemove": ["zoom2d", "pan2d", "zoomIn2d", "zoomOut2d",
+                                             "select2d", "lasso2d", "autoScale2d",
+                                             "resetScale2d"]}
+
+
+# trava os eixos (sem zoom nem arraste); janela é o trecho de datas mostrado
+def travar_eixos(fig, janela=None):
+    fig.update_layout(dragmode=False)
+    fig.update_xaxes(fixedrange=True)
+    fig.update_yaxes(fixedrange=True)
+    if janela is not None:
+        fig.update_xaxes(range=list(janela))
+    return fig
 
 
 # converte cm em texto em metros
@@ -149,6 +167,21 @@ h2, h3 {{ color: {VERDE_FOLHA} !important; }}
     background-color: {VERDE_FLORESTA};
     color: #FFFFFF;
 }}
+.faixa-estacao {{
+    background: {VERDE_FLORESTA};
+    color: #FFFFFF;
+    font-weight: 600;
+    padding: .8rem 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}}
+.st-key-caixa_assistente {{ margin-top: 1rem; }}
+.st-key-botao_assistente button {{
+    border-radius: 0 !important;
+    background-color: {VERDE_FLORESTA} !important;
+    border: 2px solid {VERDE_FLORESTA} !important;
+}}
+.st-key-botao_assistente button:hover {{ background-color: {VERDE_FOLHA} !important; }}
 </style>
 """
 
@@ -222,7 +255,26 @@ def main() -> None:
 
     st.sidebar.header("Período")
     opcoes = ["Ano inteiro"] + list(TRIMESTRES.values()) + [PREVISAO]
-    escolha = st.sidebar.radio("Mostrar", opcoes, index=0)
+    if "assistente_aberto" not in st.session_state:
+        st.session_state.assistente_aberto = False
+
+    def fechar_assistente():
+        st.session_state.assistente_aberto = False
+
+    def abrir_assistente():
+        st.session_state.assistente_aberto = True
+
+    escolha = st.sidebar.radio("Mostrar", opcoes, index=0, on_change=fechar_assistente)
+
+    # caixa separada do assistente
+    caixa = st.sidebar.container(key="caixa_assistente")
+    if st.session_state.assistente_aberto:
+        caixa.button("Voltar aos gráficos", key="botao_assistente",
+                     on_click=fechar_assistente, width="stretch")
+        from assistente import mostrar_assistente
+        mostrar_assistente()
+        return
+    caixa.button(ASSISTENTE, key="botao_assistente", on_click=abrir_assistente, width="stretch")
     if escolha == PREVISAO:
         from projecao_nivel_rio import mostrar_previsao
         mostrar_previsao()
@@ -242,8 +294,7 @@ def main() -> None:
     resumo = resumo_trimestres(diario, df)
     inicio_dados, fim_dados = df["data_hora"].iloc[0], df["data_hora"].iloc[-1]
 
-    st.info(f"**DADOS HISTÓRICOS REAIS - {ESTACAO}**, telemetria de "
-            f"{inicio_dados:%d/%m/%Y} a {fim_dados:%d/%m/%Y}. Não são medições em tempo real.")
+    st.markdown(f'<div class="faixa-estacao">{ESTACAO}</div>', unsafe_allow_html=True)
     st.title("Monitoramento do nível do rio")
     st.caption(
         "Leituras reais (a cada 15 minutos) processadas como na etapa de servidor da arquitetura "
@@ -309,7 +360,7 @@ def main() -> None:
         fig.add_trace(go.Scatter(
             x=list(x_prev) + list(x_prev[::-1]),
             y=list((previsao + erro) / 100) + list(((previsao - erro) / 100)[::-1]),
-            fill="toself", fillcolor="rgba(46,125,50,0.18)", line=dict(width=0),
+            fill="toself", fillcolor="rgba(46,125,50,0.18)", line=dict(width=0), mode="lines",
             name=f"Margem (±{erro:.1f} cm)", hoverinfo="skip"))
         fig.add_trace(go.Scatter(x=x_prev, y=previsao / 100, mode="lines",
                                  name=f"Previsão ({dias_prev} dias)",
@@ -332,7 +383,12 @@ def main() -> None:
     )
     fig.update_xaxes(gridcolor="#E3EED8")
     fig.update_yaxes(gridcolor="#E3EED8")
-    st.plotly_chart(fig, width="stretch")
+    # gráfico com barra de rolagem horizontal, sem sair de 2026
+    from rolagem import mostrar_rolavel
+    ini_grafico = (pd.Timestamp(year=inicio_dados.year, month=1, day=1) if trimestre is None
+                   else diap.index[0])
+    fim_grafico = (datas_prev[-1] if mostra_previsao else diap.index[-1]) + pd.Timedelta(days=1)
+    mostrar_rolavel(fig, ini_grafico, fim_grafico, 90 if trimestre is None else 30)
 
     # comparativo entre trimestres
     st.subheader("Comparativo entre trimestres")
@@ -356,7 +412,7 @@ def main() -> None:
                        **layout_comp)
     comp.update_yaxes(range=[resumo["minimo"].min() / 100 * 0.85, resumo["maximo"].max() / 100 * 1.05],
                       gridcolor="#E3EED8")
-    g1.plotly_chart(comp, width="stretch")
+    g1.plotly_chart(travar_eixos(comp), width="stretch", config=CONFIG_GRAFICO)
 
     var = go.Figure(go.Bar(
         x=nomes, y=resumo["variacao"] / 100, showlegend=False,
@@ -371,7 +427,7 @@ def main() -> None:
     var.update_yaxes(range=[min(resumo["variacao"].min(), 0) / 100 * 1.4 - 0.5,
                             max(resumo["variacao"].max(), 0) / 100 * 1.4 + 0.5],
                      zeroline=True, zerolinecolor=VERDE_FLORESTA, gridcolor="#E3EED8")
-    g2.plotly_chart(var, width="stretch")
+    g2.plotly_chart(travar_eixos(var), width="stretch", config=CONFIG_GRAFICO)
     if resumo["parcial"].any():
         st.caption("* Trimestre parcial: dados até "
                    f"{resumo.loc[resumo['parcial'], 'data_fim'].iloc[-1]:%d/%m/%Y}.")

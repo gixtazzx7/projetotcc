@@ -3,7 +3,7 @@
 import pandas as pd
 
 from projeto import (
-    AGUA_RIO, ESTACAO, URUCUM, VERDE_CLARO, VERDE_FLORESTA, VERDE_FOLHA,
+    ESTACAO, URUCUM, VERDE_FLORESTA, VERDE_FOLHA,
     carregar_leituras, detectar_suspeitas, metros, niveis_diarios, prever_nivel,
 )
 
@@ -31,7 +31,6 @@ def mostrar_previsao() -> None:
                             max_value=proj.index[-1].date(), value=proj.index[-1].date(),
                             format="DD/MM/YYYY")
     dia = pd.Timestamp(dia)
-    desde = st.sidebar.slider("Mostrar 2026 desde (dias antes do último dado)", 30, 320, 90, 10)
 
     st.warning(f"**PROJEÇÃO - não é medição.** Os dados reais da {ESTACAO} vão até "
                f"{inicio:%d/%m/%Y}; daí até {FIM_PROJECAO:%d/%m/%Y} os valores são projetados.")
@@ -56,20 +55,20 @@ def mostrar_previsao() -> None:
         font=dict(color=VERDE_FLORESTA), title_font=dict(color=VERDE_FLORESTA),
     )
 
-    # gráfico da previsão
-    obs = serie.loc[inicio - pd.Timedelta(days=desde):]
+    # gráfico só com a previsão de dezembro
+    ini_dez = pd.Timestamp(year=FIM_PROJECAO.year, month=12, day=1)
+    dez = proj.loc[ini_dez:FIM_PROJECAO]
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=obs.index, y=obs / 100, mode="lines", name="2026 (dados reais)",
-                             line=dict(color=AGUA_RIO, width=2.5)))
-    fig.add_trace(go.Scatter(x=proj.index, y=proj / 100, mode="lines", name="Previsão",
-                             line=dict(color=VERDE_FOLHA, width=2.5, dash="dash")))
-    fig.add_vline(x=inicio, line=dict(color=VERDE_CLARO, dash="dot"))
-    fig.add_vline(x=dia, line=dict(color=URUCUM, width=1))
-    fig.update_layout(title=f"Dados reais até {inicio:%d/%m} e previsão até {FIM_PROJECAO:%d/%m}",
-                      height=460, **layout)
-    fig.update_xaxes(gridcolor="#E3EED8")
+    fig.add_trace(go.Scatter(x=dez.index, y=dez / 100, mode="lines+markers", name="Previsão",
+                             line=dict(color=VERDE_FOLHA, width=2.5, dash="dash"),
+                             marker=dict(size=5)))
+    if ini_dez <= dia <= FIM_PROJECAO:
+        fig.add_vline(x=dia, line=dict(color=URUCUM, width=1))
+    fig.update_layout(title=f"Previsão para dezembro de {FIM_PROJECAO.year}", height=460, **layout)
+    fig.update_xaxes(gridcolor="#E3EED8", dtick="D2", tickformat="%d/%m")
     fig.update_yaxes(gridcolor="#E3EED8")
-    st.plotly_chart(fig, width="stretch")
+    from rolagem import mostrar_rolavel
+    mostrar_rolavel(fig, ini_dez, FIM_PROJECAO + pd.Timedelta(days=1), 15, abrir_no_fim=False)
 
     # tabela semanal
     st.subheader("Previsão semana a semana")
