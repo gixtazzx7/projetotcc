@@ -3,7 +3,7 @@
 import pandas as pd
 
 from projeto import (
-    ESTACAO, URUCUM, VERDE_FLORESTA, VERDE_FOLHA,
+    URUCUM, VERDE_FLORESTA, VERDE_FOLHA,
     carregar_leituras, detectar_suspeitas, metros, niveis_diarios, prever_nivel,
 )
 
@@ -32,8 +32,6 @@ def mostrar_previsao() -> None:
                             format="DD/MM/YYYY")
     dia = pd.Timestamp(dia)
 
-    st.warning(f"**PROJEÇÃO - não é medição.** Os dados reais da {ESTACAO} vão até "
-               f"{inicio:%d/%m/%Y}; daí até {FIM_PROJECAO:%d/%m/%Y} os valores são projetados.")
     st.title("Monitoramento do nível do rio")
     st.subheader(f"Previsão: {proj.index[0]:%d/%m} a {FIM_PROJECAO:%d/%m/%Y}")
     st.caption(
@@ -78,9 +76,3 @@ def mostrar_previsao() -> None:
         "Previsão": [metros(v) for v in proj.loc[semanas]],
         f"Variação desde {inicio:%d/%m}": [metros(v - atual, sinal=True) for v in proj.loc[semanas]],
     }), hide_index=True, width="stretch")
-
-    st.info("Limitação: com apenas um ano de dados, o modelo segue a tendência recente e não "
-            "conhece o ciclo anual completo do rio (por exemplo, quando a vazante termina e a "
-            "enchente começa). Quanto mais longe do último dado real, menos confiável é a previsão.")
-    st.caption(f"PROJEÇÃO a partir de dados históricos da {ESTACAO} (telemetria bruta, não "
-               "consistida). Não representa medições nem previsão oficial.")

@@ -296,11 +296,6 @@ def main() -> None:
 
     st.markdown(f'<div class="faixa-estacao">{ESTACAO}</div>', unsafe_allow_html=True)
     st.title("Monitoramento do nível do rio")
-    st.caption(
-        "Leituras reais (a cada 15 minutos) processadas como na etapa de servidor da arquitetura "
-        "IoT proposta (sensor ultrassônico → LoRaWAN → servidor → painel): filtro de leituras "
-        "suspeitas, resumo por trimestre e previsão dos próximos dias."
-    )
 
     # período escolhido
     trimestre = next((t for t, nome in TRIMESTRES.items() if nome == escolha), None)
