@@ -296,11 +296,6 @@ def main() -> None:
 
     st.markdown(f'<div class="faixa-estacao">{ESTACAO}</div>', unsafe_allow_html=True)
     st.title("Monitoramento do nível do rio")
-    st.caption(
-        "Leituras reais (a cada 15 minutos) processadas como na etapa de servidor da arquitetura "
-        "IoT proposta (sensor ultrassônico → LoRaWAN → servidor → painel): filtro de leituras "
-        "suspeitas, resumo por trimestre e previsão dos próximos dias."
-    )
 
     # período escolhido
     trimestre = next((t for t, nome in TRIMESTRES.items() if nome == escolha), None)
@@ -457,10 +452,6 @@ def main() -> None:
             "Desvio (cm)": suspeitas["desvio"].round(1),
             "Limite k·MAD (cm)": suspeitas["limite"].round(1),
         }), hide_index=True, width="stretch")
-
-    st.caption(f"DADOS HISTÓRICOS - {ESTACAO} (telemetria bruta, não consistida). "
-               "Não representam medições em tempo real do sistema proposto. Os registros do "
-               "Porto de Manaus usam outra régua e aparecem só para comparação.")
 
 
 if __name__ == "__main__":
