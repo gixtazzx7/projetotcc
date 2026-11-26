@@ -7,7 +7,9 @@ import unicodedata
 
 import pandas as pd
 
-from projeto import ESTACAO, REGISTROS_PORTO, VERDE_FLORESTA, VERDE_FOLHA, metros
+from projeto import (
+    ESTACAO, REGISTROS_PORTO, VERDE_FLORESTA, VERDE_FOLHA, encontrar_imagem, metros,
+)
 
 ANO = 2026
 
@@ -405,6 +407,9 @@ CSS_CAIXA_PERGUNTA = f"""
 [data-testid="stChatInput"] textarea::placeholder {{ color: #C8E6C9 !important; }}
 [data-testid="stChatInput"] button {{ background-color: {VERDE_FOLHA} !important; }}
 [data-testid="stChatInput"] button svg {{ fill: #FFFFFF; color: #FFFFFF; }}
+[data-testid="stChatMessageAvatarImage"] {{
+    width: 3.2rem !important; height: 3.2rem !important; object-fit: contain;
+}}
 </style>
 """
 
@@ -443,8 +448,12 @@ def mostrar_assistente() -> None:
         resposta = responder(pergunta, serie, proj, erro)
         st.session_state.conversa += [("user", pergunta), ("assistant", resposta)]
 
+    # mascote nas respostas do assistente
+    robo = encontrar_imagem("robo_assistente")
+    robo = str(robo) if robo is not None else None
     for papel, texto in st.session_state.conversa:
-        with st.chat_message(papel):
+        avatar = robo if papel == "assistant" and robo is not None else None
+        with st.chat_message(papel, avatar=avatar):
             st.write(texto)
 
     if st.session_state.conversa:
