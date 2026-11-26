@@ -453,10 +453,6 @@ def main() -> None:
             "Limite k·MAD (cm)": suspeitas["limite"].round(1),
         }), hide_index=True, width="stretch")
 
-    st.caption(f"DADOS HISTÓRICOS - {ESTACAO} (telemetria bruta, não consistida). "
-               "Não representam medições em tempo real do sistema proposto. Os registros do "
-               "Porto de Manaus usam outra régua e aparecem só para comparação.")
-
 
 if __name__ == "__main__":
     main()
