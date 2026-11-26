@@ -34,11 +34,6 @@ def mostrar_previsao() -> None:
 
     st.title("Monitoramento do nível do rio")
     st.subheader(f"Previsão: {proj.index[0]:%d/%m} a {FIM_PROJECAO:%d/%m/%Y}")
-    st.caption(
-        "Modelo de aprendizado de máquina treinado só com os dados de 2026: regressão linear que "
-        "prevê a média de um dia a partir das médias dos 7 dias anteriores. Cada dia previsto entra "
-        "como entrada do seguinte, até 31/12."
-    )
 
     c1, c2, c3 = st.columns(3)
     c1.metric(f"Último dado real ({inicio:%d/%m})", metros(atual))
